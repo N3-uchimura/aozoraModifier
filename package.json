@@ -1,0 +1,20 @@
+{
+  "name": "aozoramodify",
+  "productName": "aozoramodify",
+  "version": "0.0.1",
+  "description": "application for aozoramodify",
+  "main": "aozora.ts",
+  "scripts": {
+    "start": "ts-node aozora.ts"
+  },
+  "keywords": [],
+  "author": "N3-uchimura <uchimura@numthree.net>",
+  "license": "MIT",
+  "dependencies": {
+    "fs": "^0.0.1-security",
+    "iconv-lite": "^0.6.3",
+    "kanadaku": "^1.1.0",
+    "path": "^0.12.7",
+    "ts-node": "^10.9.2"
+  }
+}

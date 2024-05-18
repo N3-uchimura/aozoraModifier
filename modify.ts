@@ -1,29 +1,36 @@
 /**
- * aozora.ts
+ * modify.ts
  **
  * function：テキスト整形
 **/
 
 // モジュール
-import { promises } from "fs"; // fs
+import path from 'path'; // path
+import log4js from 'log4js'; // logger
+import { promises } from 'fs'; // fs
 import iconv from 'iconv-lite'; // Text converter
-import { toDakuon, toHandakuon } from 'kanadaku';
+import Encoding from 'encoding-japanese';
+import { toDakuon } from 'kanadaku';
+
+// ロガー設定
+log4js.configure({
+    appenders: {
+        out: { type: 'stdout' },
+        system: { type: 'file', filename: 'logs/access.log' }
+    },
+    categories: {
+        default: { appenders: ['out', 'system'], level: 'debug' }
+    }
+});
+const logger: any = log4js.getLogger();
 
 // ファイルシステム
-const { readFile, writeFile } = promises;
-// csv encoding
-const CSV_ENCODING: string = 'SJIS';
+const { readFile, writeFile, readdir } = promises;
 
 // 結果型
 interface removed {
     header: string;
     body: string;
-}
-
-// 置換型
-interface replaced {
-    original: string;
-    replace: string;
 }
 
 // 注釈除去
@@ -43,7 +50,6 @@ const removeAnnotation = (str: string): Promise<removed | string> => {
         } catch (e: unknown) {
             if (e instanceof Error) {
                 // エラー
-                console.log(e.message);
                 reject(e.message);
             }
         }
@@ -64,7 +70,6 @@ const removeFooter = (str: string): Promise<string> => {
         } catch (e: unknown) {
             if (e instanceof Error) {
                 // エラー
-                console.log(e.message);
                 reject(e.message);
             }
         }
@@ -81,7 +86,6 @@ const removeRuby = (str: string): Promise<string> => {
         } catch (e: unknown) {
             if (e instanceof Error) {
                 // エラー
-                console.log(e.message);
                 reject(e.message);
             }
         }
@@ -98,7 +102,6 @@ const removeBrackets = (str: string): Promise<string> => {
         } catch (e: unknown) {
             if (e instanceof Error) {
                 // エラー
-                console.log(e.message);
                 reject(e.message);
             }
         }
@@ -106,23 +109,23 @@ const removeBrackets = (str: string): Promise<string> => {
 }
 
 // 反復文字
-const repeatCharacter = (str: string): Promise<string> => {
+const repeatCharacter = async (str: string): Promise<string> => {
     return new Promise(async (resolve1, reject1) => {
         try {
-            // 置換文字長
-            let strLen: number = 0;
-            // 文字位置
-            let strPos: number = 0;
-            // 文字位置
-            let matchedStr: string = '';
             // 一時保存
             let tmpStr: string = str;
             // |除去
             const shortSymbols: string[] = ['ゝ', 'ゞ', '／＼', '／″＼'];
+
             // 処理
             await Promise.all(shortSymbols.map(async (smb: string): Promise<void> => {
                 return new Promise(async (resolve2, reject2) => {
                     try {
+                        // 置換文字長
+                        let strLen: number = 0;
+                        // 文字位置
+                        let matchedStr: string = '';
+
                         // 含まれる場合
                         if (tmpStr.includes(smb)) {
 
@@ -130,14 +133,10 @@ const repeatCharacter = (str: string): Promise<string> => {
                             if (smb == '／″＼') {
                                 // 置換文字長
                                 strLen = 2;
-                                // 文字位置
-                                strPos = -strLen;
 
                             } else {
                                 // 置換文字長
                                 strLen = smb.length;
-                                // 文字位置
-                                strPos = -strLen * 2;
                             }
 
                             // 置換文字長が2文字以上
@@ -187,25 +186,25 @@ const repeatCharacter = (str: string): Promise<string> => {
 
                                         } catch (e: unknown) {
                                             if (e instanceof Error) {
+                                                logger.error(e.message);
                                                 // エラー
-                                                console.log(e.message);
                                                 reject3();
                                             }
                                         }
                                     });
                                 }));
-                                // 結果
-                                resolve2();
 
                             } else {
-                                throw new Error("指定した文字列が見つかりません。");
+                                throw new Error('指定した文字列が見つかりません。');
                             }
                         }
+                        // 結果
+                        resolve2();
 
                     } catch (e: unknown) {
                         if (e instanceof Error) {
+                            logger.error(e.message);
                             // エラー
-                            console.log(e.message);
                             reject2();
                         }
                     }
@@ -216,8 +215,8 @@ const repeatCharacter = (str: string): Promise<string> => {
 
         } catch (e: unknown) {
             if (e instanceof Error) {
+                logger.error(e.message);
                 // エラー
-                console.log(e.message);
                 reject1('error');
             }
         }
@@ -246,7 +245,6 @@ const removeSymbols = (str: string): Promise<string> => {
                     } catch (e: unknown) {
                         if (e instanceof Error) {
                             // エラー
-                            console.log(e.message);
                             reject2();
                         }
                     }
@@ -258,7 +256,6 @@ const removeSymbols = (str: string): Promise<string> => {
         } catch (e: unknown) {
             if (e instanceof Error) {
                 // エラー
-                console.log(e.message);
                 reject1(e.message);
             }
         }
@@ -268,49 +265,86 @@ const removeSymbols = (str: string): Promise<string> => {
 // main
 (async () => {
     try {
-        // ファイル読み込み
-        const txtdata = await readFile('txt/01gyokotsuki1.txt');
-        // デコード
-        const str = iconv.decode(txtdata, CSV_ENCODING);
-        // 反復処理
-        const removedStr0: string = await repeatCharacter(str);
-        if (removedStr0 == 'error') {
-            throw new Error('error0');
-        }
-        // 注釈除去
-        const removedStr1: removed | string = await removeAnnotation(removedStr0);
-        if (typeof (removedStr1) == 'string') {
-            throw new Error('error1');
-        }
-        // フッタ除去
-        const removedStr2: string = await removeFooter(removedStr1.body);
-        if (removedStr2 == 'error') {
-            throw new Error('error2');
-        }
-        // ルビ(《》)除去
-        const removedStr3: string = await removeRuby(removedStr2);
-        if (removedStr3 == 'error') {
-            throw new Error('error3');
-        }
-        // かっこ([])除去
-        const removedStr4: string = await removeBrackets(removedStr3);
-        if (removedStr4 == 'error') {
-            throw new Error('error4');
-        }
-        // 不要文字除去
-        const removedStr5: string = await removeSymbols(removedStr4);
-        if (removedStr5 == 'error') {
-            throw new Error('error5');
-        }
-        // 書き出し
-        await writeFile('modify/01gyokotsuki1.txt', removedStr1.header + removedStr5);
+        // ファイル一覧
+        const files: string[] = await readdir('txt/');
+
+        // 全ループ
+        await Promise.all(files.map((fl: string): Promise<void> => {
+            return new Promise(async (resolve, reject) => {
+                try {
+                    // ファイルパス
+                    const filePath: string = path.join(__dirname, 'txt', fl);
+                    // ファイルパス
+                    const outPath: string = path.join(__dirname, 'modify', fl);
+                    // ファイル読み込み
+                    const txtdata = await readFile(filePath);
+                    // 文字コード検出
+                    const detectedEncoding: string | boolean = Encoding.detect(txtdata);
+                    logger.info('charcode: ' + detectedEncoding);
+                    // 文字列以外エラー
+                    if (typeof (detectedEncoding) !== 'string') {
+                        throw new Error('error-encoding');
+                    }
+                    // デコード
+                    const str = iconv.decode(txtdata, detectedEncoding);
+                    logger.debug('char decoding finished.');
+                    // 反復処理
+                    const removedStr0: string = await repeatCharacter(str);
+                    if (removedStr0 == 'error') {
+                        logger.error('0: none');
+                    }
+                    logger.debug('0: finished');
+                    // 注釈除去
+                    const removedStr1: removed | string = await removeAnnotation(removedStr0);
+                    if (typeof (removedStr1) == 'string') {
+                        throw new Error('error1');
+                    }
+                    logger.debug('1: finished');
+                    // フッタ除去
+                    const removedStr2: string = await removeFooter(removedStr1.body);
+                    if (removedStr2 == 'error') {
+                        throw new Error('error2');
+                    }
+                    logger.debug('2: finished');
+                    // ルビ(《》)除去
+                    const removedStr3: string = await removeRuby(removedStr2);
+                    if (removedStr3 == 'error') {
+                        throw new Error('error3');
+                    }
+                    logger.debug('3: finished');
+                    // かっこ([])除去
+                    const removedStr4: string = await removeBrackets(removedStr3);
+                    if (removedStr4 == 'error') {
+                        throw new Error('error4');
+                    }
+                    logger.debug('4: finished');
+                    // 不要文字除去
+                    const removedStr5: string = await removeSymbols(removedStr4);
+                    if (removedStr5 == 'error') {
+                        throw new Error('error5');
+                    }
+                    logger.debug('5: finished');
+
+                    // 書き出し
+                    await writeFile(outPath, removedStr1.header + removedStr5);
+                    logger.info('writing finished.');
+                    // 結果
+                    resolve();
+
+                } catch (e: unknown) {
+                    if (e instanceof Error) {
+                        reject();
+                    }
+                }
+            })
+        }));
         // 完了
-        console.log('finished.');
+        logger.info('operation finished.');
 
     } catch (e: unknown) {
         if (e instanceof Error) {
             // エラー
-            console.log(e.message);
+            logger.error(e.message);
         }
     }
 })();
